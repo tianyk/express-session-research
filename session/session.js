@@ -42,7 +42,7 @@ function Session(req, data) {
  * @return {Session} for chaining
  * @api public
  */
-
+// 每次有请求，重置过期时间
 Session.prototype.touch = function(){
   return this.resetMaxAge();
 };
@@ -53,7 +53,7 @@ Session.prototype.touch = function(){
  * @return {Session} for chaining
  * @api public
  */
-
+// 重置过期时间
 Session.prototype.resetMaxAge = function(){
   this.cookie.maxAge = this.cookie.originalMaxAge;
   return this;
@@ -66,7 +66,8 @@ Session.prototype.resetMaxAge = function(){
  * @return {Session} for chaining
  * @api public
  */
-
+// 持久化Session
+// sessionStore放置到req对象上
 Session.prototype.save = function(fn){
   this.req.sessionStore.set(this.id, this, fn || function(){});
   return this;
@@ -83,14 +84,14 @@ Session.prototype.save = function(fn){
  * @return {Session} for chaining
  * @api public
  */
-
+// 生成一个新的Session保存回去，同一个SessionID
 Session.prototype.reload = function(fn){
   var req = this.req
     , store = this.req.sessionStore;
   store.get(this.id, function(err, sess){
     if (err) return fn(err);
     if (!sess) return fn(new Error('failed to load session'));
-    store.createSession(req, sess);
+    store.createSession(req, sess); // req.session = new Session(req, sess);
     fn();
   });
   return this;
@@ -103,7 +104,7 @@ Session.prototype.reload = function(fn){
  * @return {Session} for chaining
  * @api public
  */
-
+// 销毁session
 Session.prototype.destroy = function(fn){
   delete this.req.session;
   this.req.sessionStore.destroy(this.id, fn);
@@ -117,7 +118,7 @@ Session.prototype.destroy = function(fn){
  * @return {Session} for chaining
  * @api public
  */
-
+// 重新生成一个Session
 Session.prototype.regenerate = function(fn){
   this.req.sessionStore.regenerate(this.req, fn);
   return this;

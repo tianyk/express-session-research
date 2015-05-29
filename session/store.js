@@ -35,7 +35,7 @@ Store.prototype.__proto__ = EventEmitter.prototype;
  * @return {Function} fn
  * @api public
  */
-
+// 重新生成一个session
 Store.prototype.regenerate = function(req, fn){
   var self = this;
   this.destroy(req.sessionID, function(err){
@@ -52,7 +52,7 @@ Store.prototype.regenerate = function(req, fn){
  * @param {Function} fn
  * @api public
  */
-
+// 获取一个Session，获取其实就是重新生成一个Session，但是id一样。刷新了过期时间
 Store.prototype.load = function(sid, fn){
   var self = this;
   this.get(sid, function(err, sess){
@@ -72,7 +72,7 @@ Store.prototype.load = function(sid, fn){
  * @return {Session}
  * @api private
  */
-
+// 生成一个Session
 Store.prototype.createSession = function(req, sess){
   var expires = sess.cookie.expires
     , orig = sess.cookie.originalMaxAge;

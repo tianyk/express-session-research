@@ -11,14 +11,14 @@
  * @private
  */
 
-var cookie = require('cookie');
-var crc = require('crc').crc32;
+var cookie = require('cookie'); // cookie解析和序列化
+var crc = require('crc').crc32; // 冗余检查 CRC JavaScript实现，参考pycrc
 var debug = require('debug')('express-session');
-var deprecate = require('depd')('express-session');
-var parseUrl = require('parseurl');
-var uid = require('uid-safe').sync
-  , onHeaders = require('on-headers')
-  , signature = require('cookie-signature')
+var deprecate = require('depd')('express-session'); // 标记模块弃用
+var parseUrl = require('parseurl'); // 解析URL 和url.parse类似，不过多次调用会缓存
+var uid = require('uid-safe').sync // 创建一个加密的UID
+  , onHeaders = require('on-headers') // 监听response写headers
+  , signature = require('cookie-signature') // oauth1.0签名
 
 var Session = require('./session/session')
   , MemoryStore = require('./session/memory')
@@ -68,19 +68,23 @@ var defer = typeof setImmediate === 'function'
  *
  * @param {Object} [options]
  * @param {Object} [options.cookie] Options for cookie
- * @param {Function} [options.genid]
+ * @param {Function} [options.genid] // 生成SessionID方式
  * @param {String} [options.name=connect.sid] Session ID cookie name
  * @param {Boolean} [options.proxy]
- * @param {Boolean} [options.resave] Resave unmodified sessions back to the store
+ * @param {Boolean} [options.resave] Resave unmodified sessions back to the store // 重新保存未修改的Session
  * @param {Boolean} [options.rolling] Enable/disable rolling session expiration
- * @param {Boolean} [options.saveUninitialized] Save uninitialized sessions to the store
+ * @param {Boolean} [options.saveUninitialized] Save uninitialized sessions to the store // 保存未初始化的Session
  * @param {String|Array} [options.secret] Secret for signing session ID
  * @param {Object} [options.store=MemoryStore] Session store
  * @param {String} [options.unset]
  * @return {Function} middleware
  * @public
  */
-
+// options
+//  - name
+//  - store
+//  - cookie
+//  - proxy
 function session(options){
   var options = options || {}
   //  name - previously "options.key"
@@ -94,17 +98,20 @@ function session(options){
   var saveUninitializedSession = options.saveUninitialized;
   var secret = options.secret;
 
+  // 生成SessionID的方式
   var generateId = options.genid || generateSessionId;
 
   if (typeof generateId !== 'function') {
     throw new TypeError('genid option must be a function');
   }
 
+  // 默认resave为true，建议配置resave
   if (resaveSession === undefined) {
     deprecate('undefined resave option; provide resave option');
     resaveSession = true;
   }
 
+  // 默认saveUninitialized为true，建议配置saveUninitialized
   if (saveUninitializedSession === undefined) {
     deprecate('undefined saveUninitialized option; provide saveUninitialized option');
     saveUninitializedSession = true;
@@ -114,9 +121,11 @@ function session(options){
     throw new TypeError('unset option must be "destroy" or "keep"');
   }
 
+  // 下个版本使用destroy
   // TODO: switch to "destroy" on next major
   var unsetDestroy = options.unset === 'destroy';
 
+  // secret 数组或者字符串，如果是数组，包含一个元素
   if (Array.isArray(secret) && secret.length === 0) {
     throw new TypeError('secret option array must contain one or more strings');
   }
@@ -125,23 +134,28 @@ function session(options){
     secret = [secret];
   }
 
+  // 建议设置secret
   if (!secret) {
     deprecate('req.secret; provide secret option');
   }
 
+  // 正式环境不建议使用MemoryStore
   // notify user that this store is not
   // meant for a production environment
   if ('production' == env && store instanceof MemoryStore) {
     console.warn(warning);
   }
 
+  // 生成一个Session
   // generates the new session
+  // 扩展 store generage方法
   store.generate = function(req){
     req.sessionID = generateId(req);
     req.session = new Session(req);
     req.session.cookie = new Cookie(cookie);
   };
 
+  // 检查store有没有实现touch方法
   var storeImplementsTouch = typeof store.touch === 'function';
   store.on('disconnect', function(){ storeReady = false; });
   store.on('connect', function(){ storeReady = true; });
@@ -168,14 +182,16 @@ function session(options){
     // req.secret is passed from the cookie parser middleware
     var secrets = secret || [req.secret];
 
-    var originalHash;
-    var originalId;
-    var savedHash;
+    var originalHash; // 原始hash
+    var originalId; // 原始sessionID
+    var savedHash; // 保存后的hash
 
     // expose store
     req.sessionStore = store;
 
     // get the session ID from the cookie
+    // get Session Cookie
+    // s:开头
     var cookieId = req.sessionID = getcookie(req, name, secrets);
 
     // set-cookie
@@ -313,10 +329,11 @@ function session(options){
     function generate() {
       store.generate(req);
       originalId = req.sessionID;
-      originalHash = hash(req.session);
+      originalHash = hash(req.session); // 数据摘要
       wrapmethods(req.session);
     }
 
+    // 封装一下save方法，在调用save之前先算一下的hash
     // wrap session methods
     function wrapmethods(sess) {
       var _save = sess.save;
@@ -327,30 +344,36 @@ function session(options){
         _save.apply(this, arguments);
       }
 
+      // 方法直接在一个对象上定义一个新属性，或者修改一个已经存在的属性， 并返回这个对象。
+      // https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty
       Object.defineProperty(sess, 'save', {
-        configurable: true,
-        enumerable: false,
+        configurable: true, // 当且仅当这个属性描述符值为 true 时，该属性可能会改变，也可能会被从相应的对象删除。默认为 false。
+        enumerable: false, // 当且仅当该属性出现在相应的对象枚举属性中。默认为 false。
         value: save,
         writable: true
       });
     }
 
     // check if session has been modified
+    // 判断session是否修改过
     function isModified(sess) {
       return originalId !== sess.id || originalHash !== hash(sess);
     }
 
     // check if session has been saved
+    // 判断其是否save过。如果save过，会计算其savedHash
     function isSaved(sess) {
       return originalId === sess.id && savedHash === hash(sess);
     }
 
     // determine if session should be destroyed
+    // 判定session是否被销毁
     function shouldDestroy(req) {
       return req.sessionID && unsetDestroy && req.session == null;
     }
 
     // determine if session should be saved to store
+    // 判定session
     function shouldSave(req) {
       // cannot set cookie without a session ID
       if (typeof req.sessionID !== 'string') {
@@ -358,6 +381,8 @@ function session(options){
         return false;
       }
 
+      // !保存未初始化的session && cookieId =
+      // ?
       return !saveUninitializedSession && cookieId !== req.sessionID
         ? isModified(req.session)
         : !isSaved(req.session)
@@ -466,6 +491,7 @@ function getcookie(req, name, secrets) {
 
     if (raw) {
       if (raw.substr(0, 2) === 's:') {
+        // 验证sessionID
         val = unsigncookie(raw.slice(2), secrets);
 
         if (val === false) {
@@ -479,6 +505,7 @@ function getcookie(req, name, secrets) {
   }
 
   // back-compat read from cookieParser() signedCookies data
+  // 兼容 可以把SessionID放置到signedCookies中？
   if (!val && req.signedCookies) {
     val = req.signedCookies[name];
 
@@ -487,6 +514,7 @@ function getcookie(req, name, secrets) {
     }
   }
 
+  // req cookie
   // back-compat read from cookieParser() cookies data
   if (!val && req.cookies) {
     raw = req.cookies[name];
@@ -536,7 +564,7 @@ function hash(sess) {
  * @return {Boolean}
  * @private
  */
-
+// 判定请求是否是安全的 like https
 function issecure(req, trustProxy) {
   // socket is https server
   if (req.connection && req.connection.encrypted) {
@@ -573,11 +601,13 @@ function issecure(req, trustProxy) {
  */
 
 function setcookie(res, name, val, secret, options) {
+  // 以s:开头
   var signed = 's:' + signature.sign(val, secret);
   var data = cookie.serialize(name, signed, options);
 
   debug('set-cookie %s', data);
 
+  // merge cookie
   var prev = res.getHeader('set-cookie') || [];
   var header = Array.isArray(prev) ? prev.concat(data)
     : Array.isArray(data) ? [prev].concat(data)
@@ -594,6 +624,7 @@ function setcookie(res, name, val, secret, options) {
  * @returns {String|Boolean}
  * @private
  */
+// 验证cookie
 function unsigncookie(val, secrets) {
   for (var i = 0; i < secrets.length; i++) {
     var result = signature.unsign(val, secrets[i]);

@@ -52,7 +52,7 @@ util.inherits(MemoryStore, Store)
  * @param {function} callback
  * @public
  */
-
+// 获取所有有效的Session
 MemoryStore.prototype.all = function all(callback) {
   var sessionIds = Object.keys(this.sessions)
   var sessions = Object.create(null)
@@ -75,7 +75,7 @@ MemoryStore.prototype.all = function all(callback) {
  * @param {function} callback
  * @public
  */
-
+// 清空Session
 MemoryStore.prototype.clear = function clear(callback) {
   this.sessions = Object.create(null)
   callback && defer(callback)
@@ -87,7 +87,7 @@ MemoryStore.prototype.clear = function clear(callback) {
  * @param {string} sessionId
  * @public
  */
-
+// 销毁Session
 MemoryStore.prototype.destroy = function destroy(sessionId, callback) {
   delete this.sessions[sessionId]
   callback && defer(callback)
@@ -100,7 +100,7 @@ MemoryStore.prototype.destroy = function destroy(sessionId, callback) {
  * @param {function} callback
  * @public
  */
-
+// 获取一个有效的Session
 MemoryStore.prototype.get = function get(sessionId, callback) {
   defer(callback, null, getSession.call(this, sessionId))
 }
@@ -120,7 +120,7 @@ MemoryStore.prototype.get = function get(sessionId, callback) {
  * @param {function} callback
  * @public
  */
-
+// 获取Session的数量
 MemoryStore.prototype.length = function length(callback) {
   this.all(function (err, sessions) {
     if (err) return callback(err)
@@ -128,6 +128,7 @@ MemoryStore.prototype.length = function length(callback) {
   })
 }
 
+// 设置一个Session
 MemoryStore.prototype.set = function set(sessionId, session, callback) {
   this.sessions[sessionId] = JSON.stringify(session)
   callback && defer(callback)
@@ -141,7 +142,7 @@ MemoryStore.prototype.set = function set(sessionId, session, callback) {
  * @param {function} callback
  * @public
  */
-
+// 直接替替换掉原Session的cookie
 MemoryStore.prototype.touch = function touch(sessionId, session, callback) {
   var currentSession = getSession.call(this, sessionId)
 
@@ -158,7 +159,7 @@ MemoryStore.prototype.touch = function touch(sessionId, session, callback) {
  * Get session from the store.
  * @private
  */
-
+// 获取一个Session，采用懒删除的策略
 function getSession(sessionId) {
   var sess = this.sessions[sessionId]
 
@@ -169,6 +170,7 @@ function getSession(sessionId) {
   // parse
   sess = JSON.parse(sess)
 
+  // 如果Session已经过期，就删掉它
   var expires = typeof sess.cookie.expires === 'string'
     ? new Date(sess.cookie.expires)
     : sess.cookie.expires

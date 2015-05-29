@@ -43,7 +43,7 @@ Cookie.prototype = {
    * @param {Date} date
    * @api public
    */
-
+  // 设置过期时间
   set expires(date) {
     this._expires = date;
     this.originalMaxAge = this.maxAge;
@@ -55,7 +55,7 @@ Cookie.prototype = {
    * @return {Date}
    * @api public
    */
-
+  // 获取过期时间
   get expires() {
     return this._expires;
   },
