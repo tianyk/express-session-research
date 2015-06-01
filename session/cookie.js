@@ -26,6 +26,7 @@ var Cookie = module.exports = function Cookie(options) {
   this.maxAge = null;
   this.httpOnly = true;
   if (options) merge(this, options);
+  // (null origin undefined) == undefined will be true
   this.originalMaxAge = undefined == this.originalMaxAge
     ? this.maxAge
     : this.originalMaxAge;

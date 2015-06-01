@@ -91,7 +91,7 @@ function session(options){
     , name = options.name || options.key || 'connect.sid'
     , store = options.store || new MemoryStore
     , cookie = options.cookie || {}
-    , trustProxy = options.proxy
+    , trustProxy = options.proxy // 反向代理，设置secure cookies
     , storeReady = true
     , rollingSessions = options.rolling || false;
   var resaveSession = options.resave;
@@ -117,12 +117,14 @@ function session(options){
     saveUninitializedSession = true;
   }
 
+  // 默认keep,如果设置为destroy在响应结束后会删除
   if (options.unset && options.unset !== 'destroy' && options.unset !== 'keep') {
     throw new TypeError('unset option must be "destroy" or "keep"');
   }
 
   // 下个版本使用destroy
   // TODO: switch to "destroy" on next major
+  // 是否destroy 没有设置，或者不是destroy为false
   var unsetDestroy = options.unset === 'destroy';
 
   // secret 数组或者字符串，如果是数组，包含一个元素
@@ -130,6 +132,8 @@ function session(options){
     throw new TypeError('secret option array must contain one or more strings');
   }
 
+  // 虽然封装成一个数组，后续使用时还是用数组的第一个元素。
+  // 之所有是一个数组是因为cookie-signature要求是一个数组
   if (secret && !Array.isArray(secret)) {
     secret = [secret];
   }
@@ -149,6 +153,9 @@ function session(options){
   // 生成一个Session
   // generates the new session
   // 扩展 store generage方法
+  // 1. 生成一个sessionId 默认使用uid(24)
+  // 2. 生成一个session对象，对象的id属性为sessionID，对象的req属性为request对象
+  // 3. 生成一个sessionCookie，cookie的内容为options.cookie
   store.generate = function(req){
     req.sessionID = generateId(req);
     req.session = new Session(req);
@@ -169,15 +176,20 @@ function session(options){
     if (!storeReady) return debug('store is disconnected'), next();
 
     // pathname mismatch
+    // 检查cookiepath，如果当前路径不在cookie path下，不做处理
+    // http://www.cnblogs.com/ainiaa/archive/2011/11/18/2253841.html
     var originalPath = parseUrl.original(req).pathname;
     if (0 != originalPath.indexOf(cookie.path || '/')) return next();
 
+    // 必须设置secret Session才可以使用
     // ensure a secret is available or bail
     if (!secret && !req.secret) {
       next(new Error('secret option required for sessions'));
       return;
     }
 
+    // 向后兼容加密的cookie
+    // req.secret从cookie中间件中解析出来
     // backwards compatibility for signed cookies
     // req.secret is passed from the cookie parser middleware
     var secrets = secret || [req.secret];
@@ -191,7 +203,7 @@ function session(options){
 
     // get the session ID from the cookie
     // get Session Cookie
-    // s:开头
+    // 获取sessionID s:开头
     var cookieId = req.sessionID = getcookie(req, name, secrets);
 
     // set-cookie
@@ -201,6 +213,7 @@ function session(options){
         return;
       }
 
+      // Session Cookie
       var cookie = req.session.cookie;
 
       // only send secure cookies via https
@@ -213,13 +226,15 @@ function session(options){
         return;
       }
 
+      // 设置SessionCookie
       setcookie(res, name, req.sessionID, secrets[0], cookie.data);
     });
 
     // proxy end() to commit the session
+    // 代理end 和 write
     var _end = res.end;
     var _write = res.write;
-    var ended = false;
+    var ended = false; // 结束标志
     res.end = function end(chunk, encoding) {
       if (ended) {
         return false;
@@ -230,6 +245,7 @@ function session(options){
       var ret;
       var sync = true;
 
+      // 调用原生的end
       function writeend() {
         if (sync) {
           ret = _end.call(res, chunk, encoding);
@@ -239,6 +255,7 @@ function session(options){
 
         _end.call(res);
       }
+
 
       function writetop() {
         if (!sync) {
@@ -273,6 +290,7 @@ function session(options){
         return ret;
       }
 
+      // false
       if (shouldDestroy(req)) {
         // destroy session
         debug('destroying');
@@ -417,8 +435,10 @@ function session(options){
     }
 
     // generate a session if the browser doesn't send a sessionID
+    // 如果没有SessionId 创建一个Session，此处的SessionID从getCookie方法中取得。
     if (!req.sessionID) {
       debug('no SID sent, generating session');
+      // 生成一个Session
       generate();
       next();
       return;
@@ -473,11 +493,12 @@ function generateSessionId(sess) {
 
 /**
  * Get the session ID cookie from request.
- *
+ * @param {string} [] SessionCookieName
  * @return {string}
  * @private
  */
-
+// SessionID以s:开头
+// 1. 先从http headers cookie中获取
 function getcookie(req, name, secrets) {
   var header = req.headers.cookie;
   var raw;
@@ -504,8 +525,8 @@ function getcookie(req, name, secrets) {
     }
   }
 
-  // back-compat read from cookieParser() signedCookies data
   // 兼容 可以把SessionID放置到signedCookies中？
+  // back-compat read from cookieParser() signedCookies data
   if (!val && req.signedCookies) {
     val = req.signedCookies[name];
 

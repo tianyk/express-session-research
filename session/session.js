@@ -21,6 +21,7 @@ module.exports = Session;
  */
 
 function Session(req, data) {
+  // 扩展属性 req, id
   Object.defineProperty(this, 'req', { value: req });
   Object.defineProperty(this, 'id', { value: req.sessionID });
 
